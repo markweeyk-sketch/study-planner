@@ -147,6 +147,11 @@ function DayRow({ date, isToday, onDrop, onRemove }) {
 function BlockCell({ dateISO, slot, onDrop, onRemove }) {
   const { state, set } = useStore();
   const [composerOpen, setComposerOpen] = React.useState(false);
+  // Track whether a drag is currently hovering over this block.
+  // We use a counter (not a boolean) so that entering/leaving child
+  // elements doesn't flicker the highlight off unexpectedly.
+  const [dropOver, setDropOver] = React.useState(false);
+  const dragCounter = React.useRef(0);
   const blockKey = blockKeyOf(dateISO, slot.id);
   const tasks = tasksInBlock(state, blockKey);
   const review = state.reviews[blockKey];
@@ -154,9 +159,26 @@ function BlockCell({ dateISO, slot, onDrop, onRemove }) {
   const over = used > slot.mins;
   const free = slot.mins - used;
 
-  const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  const onDragEnter = (e) => {
+    e.preventDefault();
+    dragCounter.current += 1;
+    if (dragCounter.current === 1) setDropOver(true);
+  };
+  const onDragLeave = (e) => {
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) setDropOver(false);
+  };
+  const onDragOver = (e) => {
+    e.preventDefault();
+    // Match dropEffect to what the source declared via effectAllowed so
+    // that Firefox (and strict browsers) don't silently cancel the drop.
+    const d = getDrag();
+    e.dataTransfer.dropEffect = (d && d.source === 'subj-card') ? 'copy' : 'move';
+  };
   const onDropFn = (e) => {
     e.preventDefault();
+    dragCounter.current = 0;
+    setDropOver(false);
     const d = getDrag();
     if (d) onDrop(d, blockKey);
     clearDrag();
@@ -171,7 +193,9 @@ function BlockCell({ dateISO, slot, onDrop, onRemove }) {
   };
 
   return (
-    <div className="block" onDragOver={onDragOver} onDrop={onDropFn}>
+    <div className={"block" + (dropOver ? ' drop-target' : '')}
+      onDragEnter={onDragEnter} onDragLeave={onDragLeave}
+      onDragOver={onDragOver} onDrop={onDropFn}>
       <div className="block-head">
         <span className="lbl">{slot.label}</span>
         <span className="tm">{fmtTimeRangeShort(slot)}</span>

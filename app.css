@@ -68,7 +68,10 @@ input, select, textarea { font-family:inherit; }
 .splash-text { font-size:14px; color:var(--muted); }
 
 /* ─────────── App chrome ─────────── */
-.app { display:grid; grid-template-rows:auto 1fr; min-height:100vh; }
+/* height:100vh + overflow:hidden gives each column a fixed height so
+   sidebar / content / right-rail scroll independently instead of
+   the whole page scrolling as one unit. */
+.app { display:grid; grid-template-rows:auto 1fr; height:100vh; overflow:hidden; }
 
 .topbar {
   display:flex; align-items:center; gap:18px;
@@ -391,6 +394,14 @@ input, select, textarea { font-family:inherit; }
   padding:1px 6px; border:1px solid var(--border-2); border-radius:4px;
 }
 .block-head .cap.over { color:var(--warn); border-color:var(--warn); }
+
+/* Drop-target highlight while a drag is hovered over the block */
+.block.drop-target { background: rgba(129,140,248,0.07); }
+.block.drop-target .drop {
+  border-color: var(--accent);
+  color: var(--ink-2);
+  background: rgba(129,140,248,0.05);
+}
 
 .tasks { display:flex; flex-direction:column; gap:4px; }
 .task {
