@@ -302,6 +302,51 @@ input, select, textarea { font-family:inherit; }
 .dots i { width:6px; height:6px; border-radius:50%; background:var(--border-3); }
 .dots i.f { background: currentColor; }
 
+/* ─────────── Week strip (last / this / next cards) ─────────── */
+.week-strip {
+  display:grid; grid-template-columns:1fr 1fr 1fr;
+  gap:10px; margin-bottom:20px;
+}
+.week-card {
+  border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; background:var(--card);
+  cursor:pointer; user-select:none;
+  transition:border-color 80ms ease, background 80ms ease;
+}
+.week-card:hover { border-color:var(--border-2); background:var(--card-2); }
+.week-card.past { background:transparent; border-style:dashed; }
+.week-card.past:hover { background:rgba(255,255,255,0.02); }
+.week-card.live { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.week-card.active:not(.live) { border-color:var(--border-3); }
+
+.wc-top {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:6px;
+}
+.wc-tag {
+  font-size:10px; font-weight:600; letter-spacing:0.09em;
+  text-transform:uppercase; color:var(--muted);
+}
+.wc-badge {
+  font-size:10px; font-weight:600;
+  color:var(--accent); border:1px solid var(--accent);
+  border-radius:4px; padding:1px 6px; letter-spacing:0.05em;
+}
+.wc-arrow { font-size:10.5px; color:var(--subtle); }
+.wc-range {
+  font-size:19px; font-weight:700; color:var(--ink);
+  margin-bottom:4px; line-height:1.15;
+}
+.week-card.past .wc-range { font-size:17px; color:var(--ink-2); }
+.wc-stats { font-size:11.5px; color:var(--ink-2); margin-bottom:3px; }
+.week-card.past .wc-stats { color:var(--muted); }
+.wc-voice {
+  font-family:"Caveat", cursive; font-size:14.5px; color:var(--warn);
+}
+.week-card.past .wc-voice {
+  font-family:inherit; font-style:italic; font-size:11px; color:var(--subtle);
+}
+
 /* ─────────── Content header ─────────── */
 .content-head {
   display:flex; align-items:flex-end; justify-content:space-between;

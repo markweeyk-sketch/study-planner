@@ -30,60 +30,32 @@ function WeekView() {
     }));
   }, [set]);
 
-  // Backlog drop (removes from any block)
+  // Backlog drop — recurring/subj-card items don't belong in the one-off backlog
   const handleBacklogDrop = React.useCallback((dragPayload) => {
     if (!dragPayload) return;
     const { task, source } = dragPayload;
-    if (source === 'recurring' || source === 'subj-card') {
-      const id = 't-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
-      set(s => ({ ...s, tasks: [...s.tasks, {
-        id, label: task.label, subject: task.subject, mins: task.mins,
-        recurringId: task.recurringId, blockKey: null,
-      }]}));
-      return;
-    }
+    if (source === 'recurring' || source === 'subj-card') return;
     set(s => ({ ...s, tasks: s.tasks.map(t => t.id === task.id ? { ...t, blockKey: null } : t) }));
   }, [set]);
 
   const removeTaskFromBlock = (taskId) => {
-    set(s => ({ ...s, tasks: s.tasks.map(t => t.id === taskId ? { ...t, blockKey: null } : t) }));
+    set(s => {
+      const t = s.tasks.find(x => x.id === taskId);
+      // Recurring instances (created by dragging a subject card) don't have a
+      // home in the backlog — delete them outright so they don't pollute one-offs.
+      if (t && t.recurringId) return { ...s, tasks: s.tasks.filter(x => x.id !== taskId) };
+      return { ...s, tasks: s.tasks.map(x => x.id === taskId ? { ...x, blockKey: null } : x) };
+    });
   };
 
   const weekDates = weekDays(weekStart);
   const weekStartISO = isoDate(weekStart);
-  const isThisWeek = isoDate(mondayOf(new Date())) === weekStartISO;
-  const weekLabel = `Week of ${fmtDayShort(weekStart)}`;
-
-  // Stats
-  const totalScheduled = weekDates.reduce((sum, d) => {
-    const slots = state.schedule[weekdayKey(d)] || [];
-    return sum + slots.reduce((acc, s) => acc + blockUsedMins(state, blockKeyOf(isoDate(d), s.id)), 0);
-  }, 0);
-  const totalAvailable = weekDates.reduce((sum, d) => {
-    const slots = state.schedule[weekdayKey(d)] || [];
-    return sum + slots.reduce((acc, s) => acc + s.mins, 0);
-  }, 0);
 
   return (
     <div className="main">
       <Sidebar weekStartDate={weekStart} weekStartISO={weekStartISO}/>
       <main className="content">
-        <div className="content-head">
-          <div>
-            <h1>{weekLabel}</h1>
-            <div className="sub">
-              {Math.round(totalScheduled/60*10)/10}h scheduled · {Math.round(totalAvailable/60*10)/10}h available
-            </div>
-          </div>
-          <div className="week-nav">
-            <button onClick={() => setWeekStart(addDays(weekStart, -7))} title="Previous week">◀</button>
-            <button className={isThisWeek ? 'today' : ''} onClick={() => setWeekStart(mondayOf(new Date()))}>
-              {isThisWeek ? 'This week' : 'Jump to today'}
-            </button>
-            <button onClick={() => setWeekStart(addDays(weekStart, 7))} title="Next week">▶</button>
-          </div>
-        </div>
-
+        <WeekStrip viewStart={weekStart} onNavigate={setWeekStart}/>
         <div className="days">
           {weekDates.map(d => (
             <DayRow key={isoDate(d)} date={d} isToday={isoDate(d) === today}
@@ -529,6 +501,100 @@ function RightRail({ onBacklogDrop }) {
         </div>
       ))}
     </aside>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// WeekStrip — last / this / next week summary cards
+// ─────────────────────────────────────────────────────────────
+function WeekStrip({ viewStart, onNavigate }) {
+  const { state } = useStore();
+  const today = new Date();
+  const todayStr = isoDate(today);
+  const thisWeek = mondayOf(today);
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmtRange = (ws) => {
+    const end = addDays(ws, 6);
+    const sm = MONTHS[ws.getMonth()], em = MONTHS[end.getMonth()];
+    return sm === em
+      ? `${sm} ${ws.getDate()} – ${end.getDate()}`
+      : `${sm} ${ws.getDate()} – ${em} ${end.getDate()}`;
+  };
+
+  const getStats = (ws) => {
+    const wsISO = isoDate(ws);
+    const weISO = isoDate(addDays(ws, 7));
+    let avail = 0, sched = 0, tasks = 0;
+    weekDays(ws).forEach(d => {
+      const dISO = isoDate(d);
+      (state.schedule[weekdayKey(d)] || []).forEach(sl => {
+        avail += sl.mins;
+        const bk = blockKeyOf(dISO, sl.id);
+        state.tasks.filter(t => t.blockKey === bk).forEach(t => {
+          sched += t.mins || 0;
+          tasks++;
+        });
+      });
+    });
+    const logged = (state.log || []).filter(e => e.date >= wsISO && e.date < weISO).length;
+    return { avail, sched, tasks, logged };
+  };
+
+  const viewISO = isoDate(viewStart);
+  const daysLeft = weekDays(thisWeek).filter(d => isoDate(d) >= todayStr).length;
+
+  const cards = [
+    { ws: addDays(thisWeek, -7), rel: 'past' },
+    { ws: thisWeek,              rel: 'current' },
+    { ws: addDays(thisWeek, 7),  rel: 'future' },
+  ];
+
+  return (
+    <div className="week-strip">
+      {cards.map(({ ws, rel }) => {
+        const wsISO = isoDate(ws);
+        const isActive = viewISO === wsISO;
+        const isPast = rel === 'past';
+        const isLive = rel === 'current';
+        const isFuture = rel === 'future';
+        const { avail, sched, tasks } = getStats(ws);
+        const availHrs = Math.round(avail / 60 * 10) / 10;
+        const schedHrs = Math.round(sched / 60 * 10) / 10;
+
+        return (
+          <div key={wsISO}
+            className={"week-card" + (isActive ? ' active' : '') + (isLive ? ' live' : '') + (isPast ? ' past' : '')}
+            onClick={() => onNavigate(ws)}>
+
+            <div className="wc-top">
+              <span className="wc-tag">
+                {isPast && 'LAST WEEK'}
+                {isLive && 'THIS WEEK · LIVE'}
+                {isFuture && 'NEXT WEEK'}
+              </span>
+              {isLive  && <span className="wc-badge">this week</span>}
+              {isPast  && <span className="wc-arrow">← past</span>}
+              {isFuture && <span className="wc-arrow">→ next</span>}
+            </div>
+
+            <div className="wc-range">{fmtRange(ws)}</div>
+
+            <div className="wc-stats">
+              {isPast   && `${schedHrs} / ${availHrs} hrs · ${tasks} tasks done`}
+              {isLive   && `${schedHrs} / ${availHrs} hrs scheduled · ${daysLeft} days left`}
+              {isFuture && `${schedHrs} / ${availHrs} hrs · blocks ready · ${tasks} tasks`}
+            </div>
+
+            <div className="wc-voice">
+              {isPast   && 'read-only · log is still editable'}
+              {isLive   && 'where you spend most of your time'}
+              {isFuture && 'drop tasks in early to spread the load'}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
