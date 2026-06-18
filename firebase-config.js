@@ -15,12 +15,12 @@
 // ──────────────────────────────────────────────────────────────
 
 window.STUDY_FIREBASE_CONFIG = {
-  apiKey:            "REPLACE_ME",
-  authDomain:        "REPLACE_ME.firebaseapp.com",
-  projectId:         "REPLACE_ME",
-  storageBucket:     "REPLACE_ME.appspot.com",
-  messagingSenderId: "REPLACE_ME",
-  appId:             "REPLACE_ME"
+  apiKey:            "AIzaSyAVCBVZ285_ywnDv_5bNAhtrPCPa8Ycu2g",
+  authDomain:        "study-planner-d474b.firebaseapp.com",
+  projectId:         "study-planner-d474b",
+  storageBucket:     "study-planner-d474b.firebasestorage.app",
+  messagingSenderId: "469485146767",
+  appId:             "1:469485146767:web:59a9c374a884f013c2d6fa"
 };
 
 // True when the config above is real (not the placeholder)
