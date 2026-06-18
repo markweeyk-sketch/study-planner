@@ -98,21 +98,76 @@ function App() {
 }
 
 // ─── Store shell: load state per-user, persist on change ─────
+// localStorage is always the instant local cache. Firestore (when this
+// is a real signed-in account, not local-only) is the cross-device
+// source of truth. The critical rule: never write to Firestore until
+// the initial fetch for this uid has resolved. Without that guard, a
+// brand-new device starts with an empty default state and — if it
+// writes before it's actually seen what's already on the server — can
+// push that emptiness up and clobber data a different device already
+// synced. readyRef enforces the "load before write" ordering.
 function StoreShell({ user, children }) {
+  const isRemote = window.STUDY_FIREBASE_ENABLED && !user.local;
   const [state, setStateInternal] = React.useState(() => loadState(user.uid));
+  const [ready, setReady] = React.useState(!isRemote);
+  const readyRef = React.useRef(!isRemote);
+  const saveTimer = React.useRef(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    clearTimeout(saveTimer.current);
+
+    const cached = loadState(user.uid);
+    setStateInternal(cached);
+    readyRef.current = !isRemote;
+    setReady(!isRemote);
+
+    if (isRemote) {
+      loadRemoteState(user.uid).then(remote => {
+        if (cancelled) return;
+        if (remote) {
+          // Remote already has data for this account — it wins. Refresh
+          // the local cache to match so offline reloads stay consistent.
+          const merged = Object.assign(emptyState(), remote);
+          setStateInternal(merged);
+          saveState(user.uid, merged);
+        } else {
+          // No remote document yet for this account. Seed it from
+          // whatever's cached on this device (real data or a fresh
+          // emptyState) — there's nothing on the server to clobber.
+          saveRemoteState(user.uid, cached);
+        }
+        readyRef.current = true;
+        setReady(true);
+      });
+    }
+
+    return () => { cancelled = true; clearTimeout(saveTimer.current); };
+  }, [user.uid, isRemote]);
+
   const setState = React.useCallback((updater) => {
     setStateInternal(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      saveState(user.uid, next);
+      saveState(user.uid, next); // local cache: always, instant
+      if (isRemote && readyRef.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => saveRemoteState(user.uid, next), 700);
+      }
       return next;
     });
-  }, [user.uid]);
-  // Re-load if user changes
-  React.useEffect(() => {
-    setStateInternal(loadState(user.uid));
-  }, [user.uid]);
+  }, [user.uid, isRemote]);
 
   const ctx = React.useMemo(() => ({ state, set: setState }), [state, setState]);
+
+  if (!ready) {
+    return (
+      <div className="splash">
+        <div className="splash-logo">S</div>
+        <div className="splash-text">Syncing…</div>
+      </div>
+    );
+  }
+
   return <StoreCtx.Provider value={ctx}>{children}</StoreCtx.Provider>;
 }
 

@@ -141,6 +141,41 @@ async function signOut() {
   if (auth) await auth.signOut();
 }
 
+// ─── Firestore sync ──────────────────────────────────────────
+// One document per user: studyPlanner/{uid}. Compat SDK, matches the
+// auth setup above — no separate v9 modular import needed.
+function firestoreDb() {
+  if (window.STUDY_FIREBASE_ENABLED && window.firebase && window.firebase.firestore) {
+    try { return window.firebase.firestore(); } catch (e) { return null; }
+  }
+  return null;
+}
+
+// Returns the remote state object, or null if there's no document yet
+// (first sync for this account) or on any error. Callers treat both
+// cases the same way — null means "nothing to overwrite local with".
+async function loadRemoteState(uid) {
+  const db = firestoreDb();
+  if (!db) return null;
+  try {
+    const snap = await db.collection('studyPlanner').doc(uid).get();
+    return snap.exists ? snap.data() : null;
+  } catch (e) {
+    console.warn('Failed to load remote state', e);
+    return null;
+  }
+}
+
+async function saveRemoteState(uid, state) {
+  const db = firestoreDb();
+  if (!db) return;
+  try {
+    await db.collection('studyPlanner').doc(uid).set(state);
+  } catch (e) {
+    console.warn('Failed to save remote state', e);
+  }
+}
+
 // ─── Date helpers (week of Monday) ───────────────────────────
 function todayISO() { return new Date().toISOString().slice(0,10); }
 function dateFromISO(s) { return new Date(s + 'T00:00:00'); }
@@ -217,6 +252,7 @@ Object.assign(window, {
   defaultSchedule, defaultRecurring, emptyState,
   loadState, saveState,
   onAuthChanged, signInWithGoogle, signInWithEmail, signOut,
+  firestoreDb, loadRemoteState, saveRemoteState,
   todayISO, dateFromISO, isoDate, mondayOf, addDays, weekDays,
   WEEKDAY_KEYS, weekdayKey, fmtDayShort,
   blockKeyOf, parseBlockKey,
