@@ -91,8 +91,9 @@ function TaskRow({ task, sourceBlockKey, onRemove }) {
     clearDrag();
   };
   return (
-    <div className="task" draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title={task.label}>
+    <div className={"task" + (task.done ? ' done' : '')} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title={task.label}>
       <span className="bar3" style={{ background: subjectColor(task.subject) }}/>
+      {task.done && <span className="task-check">✓</span>}
       <span className="name">{task.label}</span>
       <span className="mins">{task.mins}m</span>
       {task.source === 'teams' && <span className="src teams">Teams</span>}
@@ -126,9 +127,9 @@ function DropZone({ blockKey, label, onDrop }) {
 // useHash — tiny hash router
 // ─────────────────────────────────────────────────────────────
 function useHash() {
-  const [hash, setHash] = React.useState(window.location.hash.slice(1) || 'week');
+  const [hash, setHash] = React.useState(window.location.hash.slice(1) || 'today');
   React.useEffect(() => {
-    const fn = () => setHash(window.location.hash.slice(1) || 'week');
+    const fn = () => setHash(window.location.hash.slice(1) || 'today');
     window.addEventListener('hashchange', fn);
     return () => window.removeEventListener('hashchange', fn);
   }, []);

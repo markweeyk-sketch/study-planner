@@ -1,0 +1,21 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Dependencies (if build tooling is added later)
+node_modules/
+
+# Env files
+.env
+.env.local
+
+# Build output
+dist/
+build/

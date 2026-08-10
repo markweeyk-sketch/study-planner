@@ -1,7 +1,7 @@
 // Study Planner — Service Worker
 // Cache the app shell so it works offline and feels instant.
 // Bump CACHE on every release so old assets get evicted.
-const CACHE = 'study-planner-v1';
+const CACHE = 'study-planner-v2';
 
 const SHELL = [
   './',
@@ -12,6 +12,8 @@ const SHELL = [
   'js/store.jsx',
   'js/components.jsx',
   'js/modals.jsx',
+  'js/session.jsx',
+  'js/today.jsx',
   'js/week.jsx',
   'js/day.jsx',
   'js/manage.jsx',

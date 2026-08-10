@@ -51,10 +51,21 @@ function WeekView() {
   const weekDates = weekDays(weekStart);
   const weekStartISO = isoDate(weekStart);
 
+  const planWeek = () => {
+    const adds = autoPlanWeek(state, weekStart);
+    if (!adds.length) { toast("Nothing to add — this week is planned", { kind: 'voice' }); return; }
+    set(s => ({ ...s, tasks: [...s.tasks, ...adds] }));
+    toast(`Planned ${adds.length} session${adds.length > 1 ? 's' : ''}`, { kind: 'voice' });
+  };
+
   return (
     <div className="main">
       <Sidebar weekStartDate={weekStart} weekStartISO={weekStartISO}/>
       <main className="content">
+        <div className="week-toolbar">
+          <button className="btn primary sm" onClick={planWeek} title="Fill open blocks from your weekly targets">✦ Plan my week</button>
+          <span className="wt-hint">Fills open blocks from your weekly targets — never touches what you placed by hand.</span>
+        </div>
         <WeekStrip viewStart={weekStart} onNavigate={setWeekStart}/>
         <div className="days">
           {weekDates.map(d => (

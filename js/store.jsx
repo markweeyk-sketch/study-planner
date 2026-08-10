@@ -97,6 +97,30 @@ function saveState(uid, state) {
   }
 }
 
+// ─── Device-local scratch (NEVER synced to Firestore) ────────
+// The running-session clock and "already reminded" markers are
+// inherently per-device; keeping them out of the synced state avoids
+// per-second remote writes and cross-device reminder duplication.
+function sessionStorageKey(uid) { return storageKey(uid) + ':session'; }
+function loadSession(uid) {
+  try { const r = localStorage.getItem(sessionStorageKey(uid)); return r ? JSON.parse(r) : null; }
+  catch (e) { return null; }
+}
+function saveSession(uid, s) {
+  try {
+    if (s) localStorage.setItem(sessionStorageKey(uid), JSON.stringify(s));
+    else localStorage.removeItem(sessionStorageKey(uid));
+  } catch (e) { /* ignore */ }
+}
+function notifiedStorageKey(uid) { return storageKey(uid) + ':notified'; }
+function loadNotified(uid) {
+  try { const r = localStorage.getItem(notifiedStorageKey(uid)); return r ? JSON.parse(r) : null; }
+  catch (e) { return null; }
+}
+function saveNotified(uid, v) {
+  try { localStorage.setItem(notifiedStorageKey(uid), JSON.stringify(v)); } catch (e) { /* ignore */ }
+}
+
 // ─── Auth ────────────────────────────────────────────────────
 function authProvider() {
   if (window.STUDY_FIREBASE_ENABLED && window.firebase) {
@@ -232,6 +256,97 @@ function recurringDoneThisWeek(state, weekStartDate, recurringId) {
   }).length;
 }
 
+// ─── Auto-plan (idempotent, non-destructive) ─────────────────
+// Fills a week's open blocks from recurring weekly targets. Returns
+// the tasks to ADD — it never edits or removes what's already placed.
+// Because "remaining" is measured against tasks already in the week,
+// running it twice adds nothing the second time.
+function autoPlanWeek(state, weekStartDate) {
+  const today = todayISO();
+  const days = weekDays(weekStartDate);
+  const blocks = [];              // chronological, with live free-minutes
+  const daySubjects = {};         // dISO -> Set(subjects already there) — for spreading
+  days.forEach(d => {
+    const dISO = isoDate(d);
+    daySubjects[dISO] = new Set(
+      state.tasks.filter(t => t.blockKey && parseBlockKey(t.blockKey).date === dISO).map(t => t.subject)
+    );
+    (state.schedule[weekdayKey(d)] || []).forEach(slot => {
+      const bk = blockKeyOf(dISO, slot.id);
+      blocks.push({ bk, dISO, free: slot.mins - blockUsedMins(state, bk) });
+    });
+  });
+
+  const wanted = state.recurring
+    .map(r => ({ r, remaining: Math.max(0, r.target - recurringDoneThisWeek(state, weekStartDate, r.id)) }))
+    .filter(x => x.remaining > 0)
+    .sort((a, b) => {
+      const ga = a.r.group === 'subject' ? 0 : 1, gb = b.r.group === 'subject' ? 0 : 1;
+      if (ga !== gb) return ga - gb;          // subjects before activities
+      return b.remaining - a.remaining;        // most behind first
+    });
+
+  const additions = [];
+  const place = (r, spread) => {
+    for (const blk of blocks) {
+      if (blk.dISO < today) continue;          // don't plan into the past
+      if (blk.free < r.mins) continue;
+      if (spread && daySubjects[blk.dISO].has(r.subject)) continue;
+      additions.push({
+        id: 't-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        label: r.label, subject: r.subject, mins: r.mins,
+        recurringId: r.id, blockKey: blk.bk, auto: true,
+      });
+      blk.free -= r.mins;
+      daySubjects[blk.dISO].add(r.subject);
+      return true;
+    }
+    return false;
+  };
+
+  wanted.forEach(({ r, remaining }) => {
+    let n = remaining;
+    while (n > 0 && place(r, true)) n--;       // prefer one-per-day
+    while (n > 0 && place(r, false)) n--;      // then double up if needed
+  });
+  return additions;
+}
+
+// ─── Payoff (streaks + weekly recap) ─────────────────────────
+function currentStreak(state) {
+  const dates = new Set((state.log || []).map(e => e.date));
+  let d = new Date();
+  if (!dates.has(isoDate(d))) d = addDays(d, -1); // today not yet logged is OK
+  let n = 0;
+  while (dates.has(isoDate(d))) { n++; d = addDays(d, -1); }
+  return n;
+}
+function isStruggleEntry(e) {
+  return !!((e.struggle && e.struggle.trim()) || (e.struggleRating && e.struggleRating >= 4));
+}
+function weeklyRecap(state, weekStartDate) {
+  const wsISO = isoDate(weekStartDate);
+  const weISO = isoDate(addDays(weekStartDate, 7));
+  const sessions = (state.log || []).filter(e => e.date >= wsISO && e.date < weISO);
+  const subjects = state.recurring.filter(r => r.group === 'subject');
+  return {
+    count: sessions.length,
+    mins: sessions.reduce((s, e) => s + (e.mins || 0), 0),
+    subjectsHit: subjects.filter(r => recurringDoneThisWeek(state, weekStartDate, r.id) >= r.target).length,
+    subjectsTotal: subjects.length,
+    struggles: sessions.filter(isStruggleEntry).length,
+  };
+}
+
+// ─── Reminders (browser Notification permission) ─────────────
+function reminderPermission() {
+  return (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+}
+async function requestReminderPermission() {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  try { return await Notification.requestPermission(); } catch (e) { return 'denied'; }
+}
+
 // ─── Reducer ─────────────────────────────────────────────────
 function makeStore(initial) {
   let state = initial;
@@ -251,11 +366,14 @@ Object.assign(window, {
   SUBJECTS_LIST, subjectColor,
   defaultSchedule, defaultRecurring, emptyState,
   loadState, saveState,
+  loadSession, saveSession, loadNotified, saveNotified,
   onAuthChanged, signInWithGoogle, signInWithEmail, signOut,
   firestoreDb, loadRemoteState, saveRemoteState,
   todayISO, dateFromISO, isoDate, mondayOf, addDays, weekDays,
   WEEKDAY_KEYS, weekdayKey, fmtDayShort,
   blockKeyOf, parseBlockKey,
   tasksInBlock, backlogTasks, blockUsedMins, recurringDoneThisWeek,
+  autoPlanWeek, currentStreak, isStruggleEntry, weeklyRecap,
+  reminderPermission, requestReminderPermission,
   makeStore,
 });

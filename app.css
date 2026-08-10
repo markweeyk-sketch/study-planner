@@ -1013,6 +1013,123 @@ input, select, textarea { font-family:inherit; }
 ::-webkit-scrollbar-thumb:hover { background:var(--border-3); }
 ::-webkit-scrollbar-track { background:transparent; }
 
+/* ─────────── Today view ─────────── */
+.today-streak {
+  display:flex; align-items:center; gap:8px;
+  border:1px solid var(--border-2); border-radius:10px;
+  padding:6px 12px; background:var(--card);
+}
+.today-streak .ts-num { font-family:"JetBrains Mono", monospace; font-size:24px; font-weight:500; color:var(--accent); line-height:1; }
+.today-streak .ts-lbl { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; line-height:1.25; }
+
+.today-focus {
+  border:1px solid var(--border-2); border-radius:12px;
+  background:var(--card); padding:16px 18px; margin-bottom:14px;
+}
+.today-focus.live { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.today-focus.rest, .today-focus.done { background:transparent; border-style:dashed; }
+.tf-head { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; }
+.tf-tag { font-size:10px; font-weight:600; letter-spacing:0.1em; color:var(--accent); text-transform:uppercase; }
+.today-focus.rest .tf-tag, .today-focus.done .tf-tag { color:var(--muted); }
+.tf-title { font-size:17px; font-weight:600; color:var(--ink); }
+.tf-time { font-size:11px; color:var(--muted); margin-left:auto; }
+.tf-rest { font-size:13px; color:var(--muted); margin:0; }
+.tf-tasks { display:flex; flex-direction:column; gap:7px; }
+
+.today-task {
+  display:flex; align-items:center; gap:11px;
+  padding:10px 12px; border:1px solid var(--border-2);
+  border-radius:9px; background:var(--card-2);
+}
+.today-task .bar3 { width:3px; align-self:stretch; min-height:30px; border-radius:2px; }
+.today-task .tt-l { flex:1; min-width:0; }
+.today-task .tt-name { font-size:13.5px; font-weight:500; color:var(--ink); }
+.today-task .tt-meta { font-family:"JetBrains Mono", monospace; font-size:10.5px; color:var(--muted); margin-top:2px; }
+.today-task.done { opacity:0.55; }
+.today-task.done .tt-name { text-decoration:line-through; text-decoration-color:var(--subtle); color:var(--muted); }
+.today-empty-block { font-size:12.5px; color:var(--muted); padding:6px 2px; }
+.today-empty-block a { color:var(--ink-2); cursor:pointer; text-decoration:underline; }
+
+.start-btn { white-space:nowrap; }
+.task-done-chip { font-size:11px; color:var(--ok); font-family:"JetBrains Mono", monospace; white-space:nowrap; }
+.task-run-chip { font-size:11px; color:var(--accent); font-family:"JetBrains Mono", monospace; white-space:nowrap; }
+
+.today-rest-blocks { margin-bottom:6px; }
+.today-mini {
+  display:flex; align-items:center; gap:12px;
+  padding:8px 12px; border:1px solid var(--border);
+  border-radius:8px; background:var(--card); margin-bottom:5px;
+}
+.today-mini.past { opacity:0.5; }
+.today-mini .tm-time { font-size:11px; color:var(--muted); width:96px; }
+.today-mini .tm-label { flex:1; font-size:12.5px; color:var(--ink-2); }
+.today-mini .tm-cap { font-size:10.5px; color:var(--muted); }
+
+.today-week {
+  border:1px solid var(--border); border-radius:12px;
+  background:var(--card); padding:14px 16px; margin-top:20px;
+}
+.tw-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.tw-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.tw-stat {
+  border:1px solid var(--border-2); border-radius:9px;
+  background:var(--card-2); padding:10px 12px; text-align:center;
+}
+.tw-stat .n { font-family:"JetBrains Mono", monospace; font-size:20px; font-weight:500; color:var(--ink); }
+.tw-stat .l { font-size:10.5px; color:var(--muted); margin-top:3px; text-transform:uppercase; letter-spacing:0.05em; }
+.tw-win { margin-top:12px; font-size:15px; text-align:center; }
+
+.today-reminder {
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  margin-top:16px; padding:10px 14px;
+  border:1px dashed var(--border-2); border-radius:9px;
+  font-size:12.5px; color:var(--ink-2);
+}
+.today-reminder button { margin-left:auto; }
+
+/* ─────────── Week toolbar ─────────── */
+.week-toolbar { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.week-toolbar .wt-hint { font-size:11.5px; color:var(--muted); }
+
+/* ─────────── Completed task styling ─────────── */
+.task.done { opacity:0.55; }
+.task.done .name { text-decoration:line-through; text-decoration-color:var(--subtle); }
+.task .task-check { color:var(--ok); font-size:11px; flex-shrink:0; }
+
+/* ─────────── Log chips ─────────── */
+.log-chip {
+  font-size:10px; color:var(--muted);
+  padding:1px 7px; border:1px solid var(--border-2); border-radius:9px;
+}
+
+/* ─────────── Session timer bar (app-wide) ─────────── */
+.session-bar {
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
+  z-index:150; display:flex; align-items:center; gap:12px;
+  min-width:380px; max-width:calc(100vw - 32px);
+  padding:10px 12px 10px 14px;
+  background:var(--card); border:1px solid var(--accent);
+  border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.55);
+}
+.session-bar .sb-bar3 { width:3px; align-self:stretch; min-height:32px; border-radius:2px; }
+.session-bar .sb-main { flex:1; min-width:0; }
+.session-bar .sb-label { font-size:13px; font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.session-bar .sb-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+.session-bar .sb-clock { font-size:18px; font-weight:500; color:var(--accent); }
+.session-bar .sb-target { font-size:12px; color:var(--muted); }
+
+/* ─────────── Rating sheet ─────────── */
+.rate-row { display:flex; align-items:center; gap:7px; }
+.rate-dot {
+  width:38px; height:38px; border-radius:9px;
+  border:1px solid var(--border-2); background:var(--card-2);
+  color:var(--ink-2); font:inherit; font-size:14px; font-weight:500; cursor:pointer;
+}
+.rate-dot:hover { border-color:var(--border-3); color:var(--ink); }
+.rate-dot.active { background:rgba(129,140,248,0.14); border-color:var(--accent); color:var(--ink); }
+.rate-dot.hard.active { background:var(--warn-soft); border-color:var(--warn); color:var(--warn); }
+.rate-label { font-size:12px; color:var(--muted); margin-left:6px; }
+
 /* Responsive — collapse rails on narrow */
 @media (max-width: 1180px) {
   .main { grid-template-columns: 250px 1fr; }
@@ -1024,4 +1141,6 @@ input, select, textarea { font-family:inherit; }
   .topbar { padding: 8px 12px; }
   .content { padding:14px 14px 60px; }
   .blocks { grid-template-columns: 1fr; }
+  .tw-stats { grid-template-columns: repeat(2, 1fr); }
+  .session-bar { min-width:0; left:12px; right:12px; transform:none; }
 }

@@ -9,11 +9,11 @@ function LogView() {
 
   const entries = React.useMemo(() => {
     const sorted = [...state.log].sort((a, b) => b.date.localeCompare(a.date));
-    if (filter === 'struggles') return sorted.filter(e => e.struggle && e.struggle.trim());
+    if (filter === 'struggles') return sorted.filter(isStruggleEntry);
     return sorted;
   }, [state.log, filter]);
 
-  const struggles = state.log.filter(e => e.struggle && e.struggle.trim())
+  const struggles = state.log.filter(isStruggleEntry)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
@@ -81,6 +81,10 @@ function LogEntry({ entry, onDelete }) {
       {entry.topic && <div className="topic">{entry.topic}</div>}
       {entry.struggle && <div className="struggle"><span>{entry.struggle}</span></div>}
       <div className="actions">
+        {entry.mins ? <span className="log-chip mono">{entry.mins}m</span> : null}
+        {entry.struggleRating ? <span className="log-chip mono">difficulty {entry.struggleRating}/5</span> : null}
+        {entry.source === 'timer' ? <span className="log-chip mono">timed</span> : null}
+        <span style={{ flex: 1 }}/>
         <button className="btn sm warn-ghost" onClick={onDelete}>Delete</button>
       </div>
     </div>
@@ -128,10 +132,11 @@ function LogEntryForm({ onSave, onCancel }) {
 function StruggleCard({ entry }) {
   const { state, set } = useStore();
   const c = subjectColor(entry.subject);
+  const note = entry.struggle || entry.topic || (entry.struggleRating ? `difficulty ${entry.struggleRating}/5` : '');
 
   const onDragStart = (e) => {
     setDrag({
-      task: { label: `Review: ${entry.subject}`, subject: entry.subject, mins: 15, from: entry.struggle, logId: entry.id },
+      task: { label: `Review: ${entry.subject}`, subject: entry.subject, mins: 15, from: note, logId: entry.id },
       source: 'struggle',
     });
     e.dataTransfer.effectAllowed = 'copy';
@@ -152,7 +157,7 @@ function StruggleCard({ entry }) {
         if (free >= 15) {
           set(s => ({
             ...s,
-            reviews: { ...s.reviews, [bk]: { logId: entry.id, mins: 15, from: entry.struggle } },
+            reviews: { ...s.reviews, [bk]: { logId: entry.id, mins: 15, from: note } },
           }));
           toast(`Review scheduled · ${weekdayKey(d)} ${slot.label}`, { kind:'voice' });
           return;
@@ -186,7 +191,7 @@ function BySubjectMini() {
     <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
       {subjects.map(s => {
         const entries = bySubj[s];
-        const struggles = entries.filter(e => e.struggle).length;
+        const struggles = entries.filter(isStruggleEntry).length;
         return (
           <div key={s} className="manage-row" style={{ padding:'6px 10px' }}>
             <div className="bar3" style={{ background: subjectColor(s) }}/>

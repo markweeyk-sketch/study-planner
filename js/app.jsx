@@ -92,6 +92,8 @@ function App() {
         defaultSubject={addTaskOpen.subject}
         onClose={() => setAddTaskOpen(null)}/>}
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)}/>}
+      <SessionTimer/>
+      <Reminders/>
       <Toaster/>
     </StoreShell>
   );
@@ -157,7 +159,7 @@ function StoreShell({ user, children }) {
     });
   }, [user.uid, isRemote]);
 
-  const ctx = React.useMemo(() => ({ state, set: setState }), [state, setState]);
+  const ctx = React.useMemo(() => ({ state, set: setState, uid: user.uid }), [state, setState, user.uid]);
 
   if (!ready) {
     return (
@@ -174,7 +176,7 @@ function StoreShell({ user, children }) {
 // ─── Chrome: topbar + view router ────────────────────────────
 function Chrome({ user, installable, onInstall, onAdd, onPalette, menuOpen, setMenuOpen }) {
   const [hash, nav] = useHash();
-  const route = hash.split('?')[0] || 'week';
+  const route = hash.split('?')[0] || 'today';
 
   const initial = (user.displayName || user.email || 'U').slice(0,1).toUpperCase();
 
@@ -187,7 +189,7 @@ function Chrome({ user, installable, onInstall, onAdd, onPalette, menuOpen, setM
         </div>
         <nav className="topnav">
           {[
-            ['week','Week'], ['day','Day'], ['manage','Manage'],
+            ['today','Today'], ['week','Week'], ['day','Day'], ['manage','Manage'],
             ['log','Log'], ['schedule','Schedule'],
           ].map(([h, label]) => (
             <button key={h} className={route===h ? 'active' : ''} onClick={() => nav(h)}>
@@ -212,6 +214,7 @@ function Chrome({ user, installable, onInstall, onAdd, onPalette, menuOpen, setM
         </div>
       </header>
 
+      {route === 'today'    && <TodayView/>}
       {route === 'week'     && <WeekView/>}
       {route === 'day'      && <DayView/>}
       {route === 'manage'   && <ManageView/>}
