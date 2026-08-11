@@ -1,7 +1,7 @@
 // Study Planner — Service Worker
 // Cache the app shell so it works offline and feels instant.
 // Bump CACHE on every release so old assets get evicted.
-const CACHE = 'study-planner-v5';
+const CACHE = 'study-planner-v6';
 
 const SHELL = [
   './',
@@ -9,10 +9,12 @@ const SHELL = [
   'app.css',
   'manifest.json',
   'firebase-config.js',
+  'teams-config.js',
   'js/store.jsx',
   'js/components.jsx',
   'js/modals.jsx',
   'js/session.jsx',
+  'js/teams.jsx',
   'js/today.jsx',
   'js/week.jsx',
   'js/day.jsx',

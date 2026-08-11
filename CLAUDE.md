@@ -53,6 +53,10 @@ There are no ES modules or imports. Each `js/*.jsx` file ends with `Object.assig
 - Cross-component actions use window CustomEvents (e.g. `'open-add-task'`) and the `toast()` helper.
 - All styles are in the single `app.css`; dark theme only.
 
+### Teams import
+
+- `js/teams.jsx` imports **Microsoft Teams for Education assignments** into the one-off backlog. Auth is MSAL.js (CDN in index.html); config + gating live in `teams-config.js`, mirroring `firebase-config.js` — placeholder `clientId` means `STUDY_TEAMS_ENABLED` is false and the modal shows Azure setup steps instead of connecting. Flow: MSAL delegated token → Graph `/education/me/classes` then `/education/classes/{id}/assignments` → `TeamsImportModal` lists them with a guessed subject and a per-subject default duration (`subjectDefaultMins`, editable per row) → selected ones become backlog tasks with `source:'teams'` (lights the existing Teams badge) and a `teamsId` used to dedupe re-imports. Opened via the `'open-teams-import'` event (user menu + backlog rail). Long assignments are split later with the task-row `＋` (see sessions above).
+
 ### PWA
 
 `sw.js` caches the app shell. Bump the `CACHE` version string on every release so old assets are evicted.

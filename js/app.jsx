@@ -9,6 +9,7 @@ function App() {
   const [addTaskOpen, setAddTaskOpen] = React.useState(null);  // {label?, blockKey?} or null
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [teamsOpen, setTeamsOpen] = React.useState(false);
 
   // Auth
   React.useEffect(() => {
@@ -43,6 +44,13 @@ function App() {
     const fn = (ev) => setAddTaskOpen(ev.detail || {});
     window.addEventListener('open-add-task', fn);
     return () => window.removeEventListener('open-add-task', fn);
+  }, []);
+
+  // Open the Teams import modal from any event
+  React.useEffect(() => {
+    const fn = () => setTeamsOpen(true);
+    window.addEventListener('open-teams-import', fn);
+    return () => window.removeEventListener('open-teams-import', fn);
   }, []);
 
   // Global keyboard shortcuts (Ctrl+K, Ctrl+N)
@@ -92,6 +100,7 @@ function App() {
         defaultSubject={addTaskOpen.subject}
         onClose={() => setAddTaskOpen(null)}/>}
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)}/>}
+      {teamsOpen && <TeamsImportModal onClose={() => setTeamsOpen(false)}/>}
       <SessionTimer/>
       <Reminders/>
       <Toaster/>
@@ -283,6 +292,9 @@ function UserMenu({ user, open, setOpen }) {
           </button>
           <button className="item" onClick={() => { setOpen(false); window.location.hash = 'manage'; }}>
             Manage recurring tasks
+          </button>
+          <button className="item" onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('open-teams-import')); }}>
+            Import from Teams
           </button>
           <div className="sep"/>
           <button className="item" onClick={() => {

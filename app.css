@@ -1141,6 +1141,27 @@ input, select, textarea { font-family:inherit; }
 .rate-dot.hard.active { background:var(--warn-soft); border-color:var(--warn); color:var(--warn); }
 .rate-label { font-size:12px; color:var(--muted); margin-left:6px; }
 
+/* ─────────── Teams import ─────────── */
+.teams-setup { font-size:13px; color:var(--ink-2); line-height:1.5; }
+.teams-setup ol { margin:8px 0 0; padding-left:20px; }
+.teams-setup li { margin-bottom:6px; }
+.teams-connect { font-size:13px; color:var(--ink-2); line-height:1.5; }
+.teams-connect .btn { margin-top:12px; }
+.teams-err { font-size:12.5px; color:var(--warn); font-family:"JetBrains Mono", monospace; word-break:break-word; }
+.teams-list { display:flex; flex-direction:column; gap:6px; }
+.teams-row {
+  display:flex; align-items:center; gap:9px;
+  padding:8px 6px; border-bottom:1px solid var(--border);
+}
+.teams-row:last-child { border-bottom:none; }
+.teams-row.imported { opacity:0.5; }
+.teams-row .tr-main { flex:1; min-width:0; }
+.teams-row .tr-title { font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.teams-row .tr-sub { font-size:10.5px; color:var(--muted); font-family:"JetBrains Mono", monospace; margin-top:2px; }
+.teams-row .tr-subj { width:120px; padding:4px 8px; font-size:12px; flex-shrink:0; }
+.teams-row .tr-mins { width:56px; padding:4px 6px; font-size:12px; text-align:center; flex-shrink:0; }
+.teams-row .tr-m { font-size:11px; color:var(--muted); margin-left:-4px; }
+
 /* ─────────── Layout modes ───────────
    Driven by [data-layout] on .app (set by Chrome in app.jsx).
    'panels'  = the classic three-pane grid (wide screens).

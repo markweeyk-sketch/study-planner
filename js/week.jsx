@@ -497,7 +497,10 @@ function RightRail({ onBacklogDrop }) {
       style={over ? { background:'rgba(129,140,248,0.04)' } : null}>
       <div className="h-row">
         <span className="h-label">One-off tasks</span>
-        <button className="add" onClick={() => window.dispatchEvent(new CustomEvent('open-add-task'))}>+</button>
+        <span style={{ display:'flex', gap:2 }}>
+          <button className="add" title="Import from Teams" onClick={() => window.dispatchEvent(new CustomEvent('open-teams-import'))}>⇩</button>
+          <button className="add" title="Add a task" onClick={() => window.dispatchEvent(new CustomEvent('open-add-task'))}>+</button>
+        </span>
       </div>
 
       {backlog.length === 0 ? (
