@@ -79,7 +79,7 @@ function DotsProgress({ done, target, color }) {
 }
 
 // Task row inside a block — draggable
-function TaskRow({ task, sourceBlockKey, onRemove }) {
+function TaskRow({ task, sourceBlockKey, onRemove, onAddSession }) {
   const onDragStart = (e) => {
     setDrag({ task, source: 'block:' + sourceBlockKey });
     e.dataTransfer.effectAllowed = 'move';
@@ -95,9 +95,14 @@ function TaskRow({ task, sourceBlockKey, onRemove }) {
       <span className="bar3" style={{ background: subjectColor(task.subject) }}/>
       {task.done && <span className="task-check">✓</span>}
       <span className="name">{task.label}</span>
+      {task.session > 1 && <span className="sess">pt {task.session}</span>}
       <span className="mins">{task.mins}m</span>
       {task.source === 'teams' && <span className="src teams">Teams</span>}
       {task.source === 'gcal' && <span className="src gcal">GCal</span>}
+      {onAddSession && !task.done && (
+        <button className="add-session" onClick={(e) => { e.stopPropagation(); onAddSession(task); }}
+          title="Add another session for this task">＋</button>
+      )}
       <button className="x" onClick={onRemove} title="Remove from block">✕</button>
     </div>
   );

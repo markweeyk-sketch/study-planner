@@ -470,6 +470,17 @@ input, select, textarea { font-family:inherit; }
 }
 .task .src.gcal { color:#60A5FA; border-color:rgba(96,165,250,0.3); }
 .task .src.teams { color:#A78BFA; border-color:rgba(167,139,250,0.3); }
+.task .sess {
+  font-family:"JetBrains Mono", monospace; font-size:9px; color:var(--muted);
+  border:1px solid var(--border-2); border-radius:3px; padding:0 4px;
+}
+.task .add-session {
+  background:none; border:none; color:var(--subtle); cursor:pointer;
+  padding:0 3px; font-size:13px; line-height:1;
+  visibility:hidden;
+}
+.task:hover .add-session { visibility:visible; }
+.task .add-session:hover { color:var(--accent); }
 .task .x {
   background:none; border:none; color:var(--subtle); cursor:pointer;
   padding:0 4px; font-size:13px; line-height:1;
@@ -1130,16 +1141,37 @@ input, select, textarea { font-family:inherit; }
 .rate-dot.hard.active { background:var(--warn-soft); border-color:var(--warn); color:var(--warn); }
 .rate-label { font-size:12px; color:var(--muted); margin-left:6px; }
 
-/* Responsive — collapse rails on narrow */
-@media (max-width: 1180px) {
-  .main { grid-template-columns: 250px 1fr; }
-  .right-rail { display:none; }
+/* ─────────── Layout modes ───────────
+   Driven by [data-layout] on .app (set by Chrome in app.jsx).
+   'panels'  = the classic three-pane grid (wide screens).
+   'stacked' = one scrolling column — main content first, then the
+               Recurring and Backlog panels full-width below it. Built for
+               a vertical/portrait monitor where three columns don't fit.
+   'auto' resolves to one of these from orientation/width. */
+.app[data-layout="panels"] .main { grid-template-columns:268px 1fr 260px; }
+.app[data-layout="panels"] .main.no-right { grid-template-columns:268px 1fr; }
+
+.app[data-layout="stacked"] { height:auto; overflow:visible; grid-template-rows:auto auto; }
+.app[data-layout="stacked"] .main,
+.app[data-layout="stacked"] .main.no-right { display:flex; flex-direction:column; }
+.app[data-layout="stacked"] .content { order:-1; }   /* the view leads */
+.app[data-layout="stacked"] .sidebar,
+.app[data-layout="stacked"] .right-rail,
+.app[data-layout="stacked"] .content {
+  display:block; overflow:visible;
+  width:100%; max-width:900px; margin:0 auto;
+  border-left:none; border-right:none;
 }
-@media (max-width: 880px) {
-  .main { grid-template-columns: 1fr; }
-  .sidebar { display:none; }
-  .topbar { padding: 8px 12px; }
-  .content { padding:14px 14px 60px; }
+.app[data-layout="stacked"] .sidebar,
+.app[data-layout="stacked"] .right-rail { background:transparent; padding:14px 18px; }
+.app[data-layout="stacked"] .content { padding:10px 18px 72px; }
+/* A dashed divider so the stacked panels read as distinct bands. */
+.app[data-layout="stacked"] .sidebar { border-top:1px dashed var(--border); }
+.app[data-layout="stacked"] .right-rail { border-top:1px dashed var(--border); }
+
+/* Small-screen tweaks, independent of layout mode. */
+@media (max-width: 900px) {
+  .topbar { padding: 8px 12px; gap:10px; flex-wrap:wrap; }
   .blocks { grid-template-columns: 1fr; }
   .tw-stats { grid-template-columns: repeat(2, 1fr); }
   .session-bar { min-width:0; left:12px; right:12px; transform:none; }

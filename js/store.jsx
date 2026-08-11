@@ -73,19 +73,54 @@ function emptyState() {
   };
 }
 
+// ─── Timezone migration (one-time) ───────────────────────────
+// Data created before the isoDate/UTC fix stored some block dates a day
+// off (in +ve-UTC zones). Re-align every blockKey's date to the weekday
+// its slot actually belongs to. Idempotent via the tzMigrated flag, so it
+// runs once per account then no-ops everywhere.
+function migrateState(state) {
+  if (!state || state.tzMigrated) return state;
+  const slotWeekday = {};
+  Object.keys(state.schedule || {}).forEach(wd => {
+    (state.schedule[wd] || []).forEach(sl => { slotWeekday[sl.id] = wd; });
+  });
+  const fixDate = (dateISO, slotId) => {
+    const wanted = slotWeekday[slotId];
+    if (!wanted) return dateISO;                                  // unknown slot — leave it
+    if (weekdayKey(dateFromISO(dateISO)) === wanted) return dateISO; // already correct
+    for (const delta of [1, -1]) {
+      const cand = isoDate(addDays(dateFromISO(dateISO), delta));
+      if (weekdayKey(dateFromISO(cand)) === wanted) return cand;
+    }
+    return dateISO;                                               // can't reconcile — leave it
+  };
+  const tasks = (state.tasks || []).map(t => {
+    if (!t.blockKey) return t;
+    const { date, slotId } = parseBlockKey(t.blockKey);
+    const nd = fixDate(date, slotId);
+    return nd === date ? t : { ...t, blockKey: blockKeyOf(nd, slotId) };
+  });
+  const reviews = {};
+  Object.keys(state.reviews || {}).forEach(k => {
+    const { date, slotId } = parseBlockKey(k);
+    reviews[blockKeyOf(fixDate(date, slotId), slotId)] = state.reviews[k];
+  });
+  return { ...state, tasks, reviews, tzMigrated: true };
+}
+
 // ─── Persistence ────────────────────────────────────────────
 function storageKey(uid) { return STORAGE_KEY_PREFIX + (uid || ANON_UID); }
 
 function loadState(uid) {
   try {
     const raw = localStorage.getItem(storageKey(uid));
-    if (!raw) return emptyState();
+    if (!raw) return migrateState(emptyState());
     const parsed = JSON.parse(raw);
     // shallow-merge to pick up any new keys added to emptyState
-    return Object.assign(emptyState(), parsed);
+    return migrateState(Object.assign(emptyState(), parsed));
   } catch (e) {
     console.warn('Failed to load state', e);
-    return emptyState();
+    return migrateState(emptyState());
   }
 }
 
@@ -119,6 +154,16 @@ function loadNotified(uid) {
 }
 function saveNotified(uid, v) {
   try { localStorage.setItem(notifiedStorageKey(uid), JSON.stringify(v)); } catch (e) { /* ignore */ }
+}
+
+// Layout preference is a per-device display setting ('auto' | 'panels' |
+// 'stacked'), not per-account — it never syncs to Firestore.
+const LAYOUT_PREF_KEY = 'studyPlanner:layout';
+function loadLayoutPref() {
+  try { return localStorage.getItem(LAYOUT_PREF_KEY) || 'auto'; } catch (e) { return 'auto'; }
+}
+function saveLayoutPref(v) {
+  try { localStorage.setItem(LAYOUT_PREF_KEY, v); } catch (e) { /* ignore */ }
 }
 
 // ─── Auth ────────────────────────────────────────────────────
@@ -201,9 +246,18 @@ async function saveRemoteState(uid, state) {
 }
 
 // ─── Date helpers (week of Monday) ───────────────────────────
-function todayISO() { return new Date().toISOString().slice(0,10); }
+// Format a Date as YYYY-MM-DD in LOCAL time. Using toISOString() here (UTC)
+// was a bug: in +ve-UTC zones it returned the previous day, so stored block
+// dates drifted relative to weekdayKey/mondayOf (which are local). Keep all
+// date helpers local so round-trips (isoDate∘dateFromISO) are stable.
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function todayISO() { return isoDate(new Date()); }
 function dateFromISO(s) { return new Date(s + 'T00:00:00'); }
-function isoDate(d) { return d.toISOString().slice(0,10); }
 function mondayOf(d) {
   const x = new Date(d);
   const day = x.getDay(); // 0=Sun..6=Sat
@@ -265,11 +319,13 @@ function autoPlanWeek(state, weekStartDate) {
   const today = todayISO();
   const days = weekDays(weekStartDate);
   const blocks = [];              // chronological, with live free-minutes
-  const daySubjects = {};         // dISO -> Set(subjects already there) — for spreading
+  const dayRecs = {};             // dISO -> Set(recurringId already placed that day)
   days.forEach(d => {
     const dISO = isoDate(d);
-    daySubjects[dISO] = new Set(
-      state.tasks.filter(t => t.blockKey && parseBlockKey(t.blockKey).date === dISO).map(t => t.subject)
+    dayRecs[dISO] = new Set(
+      state.tasks
+        .filter(t => t.blockKey && t.recurringId && parseBlockKey(t.blockKey).date === dISO)
+        .map(t => t.recurringId)
     );
     (state.schedule[weekdayKey(d)] || []).forEach(slot => {
       const bk = blockKeyOf(dISO, slot.id);
@@ -286,19 +342,22 @@ function autoPlanWeek(state, weekStartDate) {
       return b.remaining - a.remaining;        // most behind first
     });
 
+  // Hard rule: a recurring item is never placed twice on the same day. If
+  // there aren't enough distinct days to meet a weekly target we leave it
+  // short rather than doubling up — that's why e.g. Piano is 7×/wk (one a day).
   const additions = [];
-  const place = (r, spread) => {
+  const place = (r) => {
     for (const blk of blocks) {
       if (blk.dISO < today) continue;          // don't plan into the past
       if (blk.free < r.mins) continue;
-      if (spread && daySubjects[blk.dISO].has(r.subject)) continue;
+      if (dayRecs[blk.dISO].has(r.id)) continue;
       additions.push({
         id: 't-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
         label: r.label, subject: r.subject, mins: r.mins,
         recurringId: r.id, blockKey: blk.bk, auto: true,
       });
       blk.free -= r.mins;
-      daySubjects[blk.dISO].add(r.subject);
+      dayRecs[blk.dISO].add(r.id);
       return true;
     }
     return false;
@@ -306,10 +365,72 @@ function autoPlanWeek(state, weekStartDate) {
 
   wanted.forEach(({ r, remaining }) => {
     let n = remaining;
-    while (n > 0 && place(r, true)) n--;       // prefer one-per-day
-    while (n > 0 && place(r, false)) n--;      // then double up if needed
+    while (n > 0 && place(r)) n--;
   });
   return additions;
+}
+
+// Guard for manual placement: an activity is scheduled at most once per day.
+// Returns a human message if placing `recurringId` into `dateISO` would
+// duplicate an activity that day (ignoring `exceptTaskId`), else null.
+function activityConflict(state, recurringId, dateISO, exceptTaskId) {
+  if (!recurringId) return null;
+  const r = state.recurring.find(x => x.id === recurringId);
+  if (!r || r.group !== 'activity') return null;
+  const clash = state.tasks.some(t =>
+    t.id !== exceptTaskId && t.recurringId === recurringId &&
+    t.blockKey && parseBlockKey(t.blockKey).date === dateISO);
+  return clash ? `${r.label} is already scheduled ${weekdayKey(dateFromISO(dateISO))}` : null;
+}
+
+// ─── Sessions (split a long task across blocks) ──────────────
+// A task represents one study session. A long assignment can need several,
+// linked by a shared `seriesId`. nextSessionBlock finds where a follow-up
+// session should land: the current block if it still has room ("at the end
+// of the first"), otherwise the earliest later block that fits — respecting
+// the activity one-per-day rule. Returns a blockKey, or null for the backlog.
+function nextSessionBlock(state, task) {
+  const cur = parseBlockKey(task.blockKey);
+  if (!cur) return null;
+  const mins = task.mins || 0;
+  const start = dateFromISO(cur.date);
+  for (let off = 0; off < 21; off++) {
+    const d = addDays(start, off);
+    const dISO = isoDate(d);
+    // Activities never repeat within a day — skip the whole day if it clashes.
+    if (activityConflict(state, task.recurringId, dISO, null)) continue;
+    const slots = state.schedule[weekdayKey(d)] || [];
+    let startIdx = 0;
+    if (off === 0) {
+      const ci = slots.findIndex(sl => sl.id === cur.slotId);
+      startIdx = ci < 0 ? 0 : ci; // include the current block as the first candidate
+    }
+    for (let i = startIdx; i < slots.length; i++) {
+      const bk = blockKeyOf(dISO, slots[i].id);
+      if (slots[i].mins - blockUsedMins(state, bk) >= mins) return bk;
+    }
+  }
+  return null;
+}
+
+// Append one more session for `task`, grouped by seriesId. Places it via
+// nextSessionBlock (or backlog if nothing fits). Mutates through `set`.
+function addSessionFor(state, set, task) {
+  const seriesId = task.seriesId || task.id;
+  const bk = nextSessionBlock(state, task);
+  const seriesCount = state.tasks.filter(x => (x.seriesId || x.id) === seriesId).length;
+  const newTask = {
+    id: 't-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+    label: task.label, subject: task.subject, mins: task.mins,
+    recurringId: task.recurringId || null, blockKey: bk,
+    source: task.source || null, due: task.due || null,
+    seriesId, session: seriesCount + 1,
+  };
+  set(s => ({
+    ...s,
+    tasks: s.tasks.map(x => x.id === task.id ? { ...x, seriesId, session: x.session || 1 } : x).concat(newTask),
+  }));
+  toast(bk ? 'Follow-up session added' : 'Session queued to backlog — no room after', { kind: 'voice' });
 }
 
 // ─── Payoff (streaks + weekly recap) ─────────────────────────
@@ -365,15 +486,17 @@ Object.assign(window, {
   STORAGE_KEY_PREFIX, ANON_UID,
   SUBJECTS_LIST, subjectColor,
   defaultSchedule, defaultRecurring, emptyState,
-  loadState, saveState,
+  migrateState, loadState, saveState,
   loadSession, saveSession, loadNotified, saveNotified,
+  loadLayoutPref, saveLayoutPref,
   onAuthChanged, signInWithGoogle, signInWithEmail, signOut,
   firestoreDb, loadRemoteState, saveRemoteState,
   todayISO, dateFromISO, isoDate, mondayOf, addDays, weekDays,
   WEEKDAY_KEYS, weekdayKey, fmtDayShort,
   blockKeyOf, parseBlockKey,
   tasksInBlock, backlogTasks, blockUsedMins, recurringDoneThisWeek,
-  autoPlanWeek, currentStreak, isStruggleEntry, weeklyRecap,
+  autoPlanWeek, activityConflict, nextSessionBlock, addSessionFor,
+  currentStreak, isStruggleEntry, weeklyRecap,
   reminderPermission, requestReminderPermission,
   makeStore,
 });

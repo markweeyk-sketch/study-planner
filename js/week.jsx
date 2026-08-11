@@ -11,8 +11,11 @@ function WeekView() {
   const handleDrop = React.useCallback((dragPayload, targetBlockKey) => {
     if (!dragPayload) return;
     const { task, source } = dragPayload;
+    const { date } = parseBlockKey(targetBlockKey);
 
     if (source === 'recurring' || source === 'subj-card') {
+      const conflict = activityConflict(state, task.recurringId, date, null);
+      if (conflict) { toast(conflict, { kind:'warn' }); return; }
       // create a placement task from the recurring def
       const id = 't-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
       set(s => ({ ...s, tasks: [...s.tasks, {
@@ -24,11 +27,13 @@ function WeekView() {
     }
 
     // From block or backlog: just reassign blockKey
+    const conflict = activityConflict(state, task.recurringId, date, task.id);
+    if (conflict) { toast(conflict, { kind:'warn' }); return; }
     set(s => ({
       ...s,
       tasks: s.tasks.map(t => t.id === task.id ? { ...t, blockKey: targetBlockKey } : t),
     }));
-  }, [set]);
+  }, [set, state]);
 
   // Backlog drop — recurring/subj-card items don't belong in the one-off backlog
   const handleBacklogDrop = React.useCallback((dragPayload) => {
@@ -187,7 +192,8 @@ function BlockCell({ dateISO, slot, onDrop, onRemove }) {
       <div className="tasks">
         {tasks.map(t => (
           <TaskRow key={t.id} task={t} sourceBlockKey={blockKey}
-            onRemove={() => onRemove(t.id)}/>
+            onRemove={() => onRemove(t.id)}
+            onAddSession={() => addSessionFor(state, set, t)}/>
         ))}
         {review && (
           <div className="review" title="Review slot">
@@ -255,13 +261,18 @@ function InlineComposer({ blockKey, slot, free, onClose }) {
 
   const choose = (it) => {
     if (!it) return;
+    const date = parseBlockKey(blockKey).date;
     if (it.type === 'recurring') {
       const r = it.rec;
+      const conflict = activityConflict(state, r.id, date, null);
+      if (conflict) { toast(conflict, { kind:'warn' }); onClose(); return; }
       const id = 't-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
       set(s => ({ ...s, tasks: [...s.tasks, {
         id, label:r.label, subject:r.subject, mins:r.mins, recurringId:r.id, blockKey,
       }]}));
     } else if (it.type === 'task') {
+      const conflict = activityConflict(state, it.task.recurringId, date, it.task.id);
+      if (conflict) { toast(conflict, { kind:'warn' }); onClose(); return; }
       set(s => ({ ...s, tasks: s.tasks.map(t => t.id === it.task.id ? { ...t, blockKey } : t) }));
     } else if (it.type === 'create') {
       // open the full Add-task modal for fine control

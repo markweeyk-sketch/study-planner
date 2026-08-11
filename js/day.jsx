@@ -9,12 +9,21 @@ function DayView() {
   const wk = weekdayKey(date);
   const slots = state.schedule[wk] || [];
 
-  const removeTask = (id) => set(s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, blockKey:null } : t) }));
+  // Recurring instances have no home in the backlog — delete them outright
+  // on remove instead of orphaning them there (matches the Week view).
+  const removeTask = (id) => set(s => {
+    const t = s.tasks.find(x => x.id === id);
+    if (t && t.recurringId) return { ...s, tasks: s.tasks.filter(x => x.id !== id) };
+    return { ...s, tasks: s.tasks.map(x => x.id === id ? { ...x, blockKey: null } : x) };
+  });
 
   const handleDrop = (dragPayload, targetBlockKey) => {
     if (!dragPayload) return;
     const { task, source } = dragPayload;
+    const { date } = parseBlockKey(targetBlockKey);
     if (source === 'recurring' || source === 'subj-card') {
+      const conflict = activityConflict(state, task.recurringId, date, null);
+      if (conflict) { toast(conflict, { kind:'warn' }); return; }
       const id = 't-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
       set(s => ({ ...s, tasks: [...s.tasks, {
         id, label:task.label, subject:task.subject, mins:task.mins,
@@ -22,6 +31,8 @@ function DayView() {
       }]}));
       return;
     }
+    const conflict = activityConflict(state, task.recurringId, date, task.id);
+    if (conflict) { toast(conflict, { kind:'warn' }); return; }
     set(s => ({ ...s, tasks: s.tasks.map(t => t.id === task.id ? { ...t, blockKey:targetBlockKey } : t) }));
   };
 
@@ -79,7 +90,14 @@ function DayBlock({ dateISO, slot, onDrop, onRemove }) {
   const over = used > slot.mins;
   const free = slot.mins - used;
 
-  const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  const onDragOver = (e) => {
+    e.preventDefault();
+    // Match dropEffect to what the source declared (subject/activity cards
+    // drag with effectAllowed='copy'); a mismatch makes the browser reject
+    // the drop, which is why activities couldn't be dragged in before.
+    const d = getDrag();
+    e.dataTransfer.dropEffect = (d && d.source === 'subj-card') ? 'copy' : 'move';
+  };
   const onDropFn = (e) => {
     e.preventDefault();
     const d = getDrag();
@@ -106,7 +124,8 @@ function DayBlock({ dateISO, slot, onDrop, onRemove }) {
       <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:6 }}>
         {tasks.map(t => (
           <TaskRow key={t.id} task={t} sourceBlockKey={blockKey}
-            onRemove={() => onRemove(t.id)}/>
+            onRemove={() => onRemove(t.id)}
+            onAddSession={() => addSessionFor(state, set, t)}/>
         ))}
         {review && (
           <div className="review">

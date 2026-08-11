@@ -121,6 +121,7 @@ function StoreShell({ user, children }) {
 
     const cached = loadState(user.uid);
     setStateInternal(cached);
+    saveState(user.uid, cached); // persist any timezone migration applied on load
     readyRef.current = !isRemote;
     setReady(!isRemote);
 
@@ -130,9 +131,12 @@ function StoreShell({ user, children }) {
         if (remote) {
           // Remote already has data for this account — it wins. Refresh
           // the local cache to match so offline reloads stay consistent.
-          const merged = Object.assign(emptyState(), remote);
+          const merged = migrateState(Object.assign(emptyState(), remote));
           setStateInternal(merged);
           saveState(user.uid, merged);
+          // If the server copy predates the timezone fix, push the migrated
+          // version up so every device converges on the corrected dates.
+          if (!remote.tzMigrated) saveRemoteState(user.uid, merged);
         } else {
           // No remote document yet for this account. Seed it from
           // whatever's cached on this device (real data or a fresh
@@ -178,10 +182,25 @@ function Chrome({ user, installable, onInstall, onAdd, onPalette, menuOpen, setM
   const [hash, nav] = useHash();
   const route = hash.split('?')[0] || 'today';
 
+  // Layout mode: 'auto' resolves to stacked on portrait/narrow screens
+  // (e.g. a 1080-wide vertical monitor) and panels on wide ones; the user
+  // can pin either from the top-bar toggle.
+  const NARROW = '(orientation: portrait), (max-width: 1100px)';
+  const [layoutPref, setLayoutPrefState] = React.useState(() => loadLayoutPref());
+  const [isNarrow, setIsNarrow] = React.useState(() => window.matchMedia(NARROW).matches);
+  React.useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const fn = () => setIsNarrow(mq.matches);
+    mq.addEventListener ? mq.addEventListener('change', fn) : mq.addListener(fn);
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', fn) : mq.removeListener(fn); };
+  }, []);
+  const effectiveLayout = layoutPref === 'auto' ? (isNarrow ? 'stacked' : 'panels') : layoutPref;
+  const setLayout = (v) => { setLayoutPrefState(v); saveLayoutPref(v); };
+
   const initial = (user.displayName || user.email || 'U').slice(0,1).toUpperCase();
 
   return (
-    <div className="app">
+    <div className="app" data-layout={effectiveLayout}>
       <header className="topbar">
         <div className="brand">
           <div className="logo">S</div>
@@ -198,6 +217,12 @@ function Chrome({ user, installable, onInstall, onAdd, onPalette, menuOpen, setM
           ))}
         </nav>
         <div className="right">
+          <div className="view-toggle" title="Layout: stacked for a vertical monitor, panels for a wide one">
+            <button className={effectiveLayout==='panels' ? 'active' : ''}
+              onClick={() => setLayout('panels')} title="Panels (side-by-side)">▤</button>
+            <button className={effectiveLayout==='stacked' ? 'active' : ''}
+              onClick={() => setLayout('stacked')} title="Stacked (single column)">≡</button>
+          </div>
           {installable && (
             <button className="install-btn" onClick={onInstall} title="Install as app">
               ↓ Install
