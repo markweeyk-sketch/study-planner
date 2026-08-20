@@ -1076,6 +1076,29 @@ input, select, textarea { font-family:inherit; }
 .today-mini .tm-label { flex:1; font-size:12.5px; color:var(--ink-2); }
 .today-mini .tm-cap { font-size:10.5px; color:var(--muted); }
 
+/* Exams ahead */
+.today-exams { margin-bottom:6px; }
+.exam-row {
+  display:flex; align-items:center; gap:11px;
+  padding:9px 12px; border:1px solid var(--border);
+  border-radius:9px; background:var(--card); margin-bottom:5px;
+}
+.exam-row.soon { border-color:var(--warn); background:var(--warn-soft); }
+.exam-row .bar3 { width:3px; align-self:stretch; min-height:30px; border-radius:2px; }
+.exam-row .er-l { flex:1; min-width:0; }
+.exam-row .er-name { font-size:13.5px; font-weight:500; color:var(--ink); }
+.exam-row .er-meta { font-family:"JetBrains Mono", monospace; font-size:10.5px; color:var(--muted); margin-top:2px; }
+.exam-row .er-cd {
+  font-family:"JetBrains Mono", monospace; font-size:15px; font-weight:500; color:var(--ink-2);
+  flex-shrink:0;
+}
+.exam-row.soon .er-cd { color:var(--warn); }
+.imp-tag {
+  font-size:9.5px; color:var(--warn); border:1px solid rgba(232,184,106,0.4);
+  border-radius:3px; padding:0 5px; margin-left:8px; font-family:"JetBrains Mono", monospace;
+  text-transform:uppercase; letter-spacing:0.04em;
+}
+
 .today-week {
   border:1px solid var(--border); border-radius:12px;
   background:var(--card); padding:14px 16px; margin-top:20px;

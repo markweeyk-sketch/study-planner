@@ -1,7 +1,7 @@
 // Study Planner — Service Worker
 // Cache the app shell so it works offline and feels instant.
 // Bump CACHE on every release so old assets get evicted.
-const CACHE = 'study-planner-v6';
+const CACHE = 'study-planner-v7';
 
 const SHELL = [
   './',

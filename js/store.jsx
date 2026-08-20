@@ -65,9 +65,10 @@ function emptyState() {
   return {
     schedule: defaultSchedule(),
     recurring: defaultRecurring(),
-    tasks: [],         // { id, label, subject, mins, due?, blockKey?, recurringId?, source? }
+    tasks: [],         // { id, label, subject, mins, due?, type?, assessmentId?, blockKey?, recurringId?, source? }
     log: [],           // { id, date, blockKey, subject, topic, struggle? }
     reviews: {},       // blockKey -> { logId, mins }  (the review slot in that block)
+    assessments: [],   // { id, label, subject, date, importance, minSessions, sessionMins }
     weekStart: 'Mon',
     onboarded: false,
   };
@@ -459,6 +460,45 @@ function weeklyRecap(state, weekStartDate) {
   };
 }
 
+// ─── Assessments (exams) & the revision-budget brain ─────────
+function daysUntil(dateISO) {
+  return Math.round((dateFromISO(dateISO) - dateFromISO(todayISO())) / 86400000);
+}
+
+// Extra revision sessions earned by how much you've struggled in a subject.
+// Uses only the signal you actually produce (logged struggle ratings/notes),
+// so it's personalised and defensible — not a made-up number. Capped.
+function assessmentStruggleBonus(state, subject) {
+  const entries = (state.log || []).filter(e =>
+    e.subject === subject && (e.struggleRating || (e.struggle && e.struggle.trim())));
+  if (!entries.length) return 0;
+  const rated = entries.filter(e => e.struggleRating);
+  const avg = rated.length ? rated.reduce((s, e) => s + e.struggleRating, 0) / rated.length : 0;
+  const hardCount = entries.filter(isStruggleEntry).length;
+  let bonus = 0;
+  if (avg >= 4) bonus += 2; else if (avg >= 3.2) bonus += 1;
+  if (hardCount >= 3) bonus += 1;
+  return Math.min(bonus, 4);
+}
+
+// How many revision sessions to aim for before an assessment: a minimum
+// floor, +2 if flagged important, plus the struggle bonus above.
+function revisionPlanFor(state, a) {
+  const min = a.minSessions != null ? a.minSessions : 3;
+  const importanceBonus = (a.importance || 2) >= 3 ? 2 : 0;
+  const struggleBonus = assessmentStruggleBonus(state, a.subject);
+  return { min, importanceBonus, struggleBonus, total: min + importanceBonus + struggleBonus };
+}
+function assessmentRevisionTarget(state, a) { return revisionPlanFor(state, a).total; }
+
+// Assessments from today forward, soonest first.
+function upcomingAssessments(state) {
+  const today = todayISO();
+  return (state.assessments || [])
+    .filter(a => a.date >= today)
+    .sort((x, y) => x.date.localeCompare(y.date));
+}
+
 // ─── Reminders (browser Notification permission) ─────────────
 function reminderPermission() {
   return (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
@@ -497,6 +537,7 @@ Object.assign(window, {
   tasksInBlock, backlogTasks, blockUsedMins, recurringDoneThisWeek,
   autoPlanWeek, activityConflict, nextSessionBlock, addSessionFor,
   currentStreak, isStruggleEntry, weeklyRecap,
+  daysUntil, assessmentStruggleBonus, revisionPlanFor, assessmentRevisionTarget, upcomingAssessments,
   reminderPermission, requestReminderPermission,
   makeStore,
 });

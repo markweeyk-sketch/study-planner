@@ -106,6 +106,26 @@ function TodayView() {
           </div>
         )}
 
+        {upcomingAssessments(state).length > 0 && (
+          <div className="today-exams">
+            <div className="h-label" style={{ margin:'18px 4px 8px' }}>Exams ahead</div>
+            {upcomingAssessments(state).slice(0, 5).map(a => {
+              const d = daysUntil(a.date);
+              const plan = revisionPlanFor(state, a);
+              return (
+                <div key={a.id} className={"exam-row" + (d <= 3 ? ' soon' : '')}>
+                  <span className="bar3" style={{ background: subjectColor(a.subject) }}/>
+                  <div className="er-l">
+                    <div className="er-name">{a.label || a.subject}</div>
+                    <div className="er-meta">{a.subject} · {fmtDayShort(dateFromISO(a.date))} · {plan.total} revision session{plan.total === 1 ? '' : 's'}{plan.struggleBonus ? ` (+${plan.struggleBonus} — you've struggled)` : ''}</div>
+                  </div>
+                  <div className="er-cd">{d === 0 ? 'today' : d + 'd'}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="today-week">
           <div className="tw-head">
             <span className="h-label">This week</span>
