@@ -29,12 +29,7 @@ function TodayView() {
   const hr = now.getHours();
   const greeting = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
 
-  const planWeek = () => {
-    const adds = autoPlanWeek(state, weekStart);
-    if (!adds.length) { toast("Week already planned — you're on track", { kind: 'voice' }); return; }
-    set(s => ({ ...s, tasks: [...s.tasks, ...adds] }));
-    toast(`Planned ${adds.length} session${adds.length > 1 ? 's' : ''} across your week`, { kind: 'voice' });
-  };
+  const planWeek = () => window.dispatchEvent(new CustomEvent('open-planner'));
 
   const renderTasks = (bk, slotLabel) => {
     const tasks = tasksInBlock(state, bk);
@@ -129,7 +124,7 @@ function TodayView() {
         <div className="today-week">
           <div className="tw-head">
             <span className="h-label">This week</span>
-            <button className="btn sm primary" onClick={planWeek} title="Fill open blocks from your weekly targets">✦ Plan my week</button>
+            <button className="btn sm primary" onClick={planWeek} title="Plan homework, exam revision and general revision around your deadlines">✦ Plan my schedule</button>
           </div>
           <div className="tw-stats">
             <div className="tw-stat"><div className="n">{recap.count}</div><div className="l">sessions</div></div>

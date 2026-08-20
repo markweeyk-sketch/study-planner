@@ -10,6 +10,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [teamsOpen, setTeamsOpen] = React.useState(false);
+  const [plannerOpen, setPlannerOpen] = React.useState(false);
 
   // Auth
   React.useEffect(() => {
@@ -51,6 +52,13 @@ function App() {
     const fn = () => setTeamsOpen(true);
     window.addEventListener('open-teams-import', fn);
     return () => window.removeEventListener('open-teams-import', fn);
+  }, []);
+
+  // Open the advisory planner from any event
+  React.useEffect(() => {
+    const fn = () => setPlannerOpen(true);
+    window.addEventListener('open-planner', fn);
+    return () => window.removeEventListener('open-planner', fn);
   }, []);
 
   // Global keyboard shortcuts (Ctrl+K, Ctrl+N)
@@ -101,6 +109,7 @@ function App() {
         onClose={() => setAddTaskOpen(null)}/>}
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)}/>}
       {teamsOpen && <TeamsImportModal onClose={() => setTeamsOpen(false)}/>}
+      {plannerOpen && <PlanReviewModal onClose={() => setPlannerOpen(false)}/>}
       <SessionTimer/>
       <Reminders/>
       <Toaster/>

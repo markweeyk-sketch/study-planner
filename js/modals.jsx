@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 // ── Generic modal wrapper ────────────────────────────────────
-function Modal({ children, onClose }) {
+function Modal({ children, onClose, className }) {
   // Close on Esc
   React.useEffect(() => {
     const fn = (e) => { if (e.key === 'Escape') onClose(); };
@@ -12,7 +12,7 @@ function Modal({ children, onClose }) {
   }, [onClose]);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className={"modal" + (className ? ' ' + className : '')} onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -346,4 +346,77 @@ function SignInScreen({ onLocalContinue }) {
   );
 }
 
-Object.assign(window, { Modal, AddTaskModal, CommandPalette, SignInScreen });
+// ─────────────────────────────────────────────────────────────
+// Plan review — advisory schedule proposal (Increment 2)
+// ─────────────────────────────────────────────────────────────
+function PlanReviewModal({ onClose }) {
+  const { state, set } = useStore();
+  const { placements, unfit } = React.useMemo(() => planSchedule(state), [state]);
+
+  const byDay = React.useMemo(() => {
+    const m = {};
+    placements.forEach(p => { (m[p.dISO] = m[p.dISO] || []).push(p); });
+    return Object.keys(m).sort().map(d => ({ d, items: m[d] }));
+  }, [placements]);
+
+  const totalMins = placements.reduce((s, p) => s + p.mins, 0);
+  const kindLabel = { homework: 'Homework', revision: 'Revision', general: 'Revision' };
+
+  const apply = () => {
+    if (!placements.length) { onClose(); return; }
+    set(s => applyPlan(s, placements));
+    toast(`Scheduled ${placements.length} sessions`, { kind: 'voice' });
+    onClose();
+  };
+
+  return (
+    <Modal onClose={onClose} className="modal-wide">
+      <div className="modal-head">
+        <h3>Your plan</h3>
+        <button className="close" onClick={onClose}>✕</button>
+      </div>
+      <div className="modal-body">
+        <div className="plan-summary">
+          {placements.length
+            ? <>Proposing <b>{placements.length}</b> sessions ({Math.round(totalMins / 60 * 10) / 10}h) — homework in the earliest safe blocks, exam revision spread across the run-up, general revision filling the gaps. Nothing is scheduled until you apply.</>
+            : <>Nothing to schedule — your commitments are placed, or there are no open blocks.</>}
+        </div>
+
+        {unfit.length > 0 && (
+          <div className="plan-warn">
+            <div className="pw-head">Won't fit before the deadline</div>
+            {unfit.map((u, i) => (
+              <div key={i} className="pw-item">
+                {u.kind === 'homework' ? u.label : 'Revise ' + u.subject} — needs a slot by {fmtDayShort(dateFromISO(u.deadline))}
+              </div>
+            ))}
+            <div className="pw-tip">Add a block, trim general revision, or start these earlier.</div>
+          </div>
+        )}
+
+        {byDay.map(({ d, items }) => (
+          <div key={d} className="plan-day">
+            <div className="pd-head">{weekdayKey(dateFromISO(d))} · {fmtDayShort(dateFromISO(d))}</div>
+            {items.map((p, i) => (
+              <div key={i} className={"plan-item " + p.kind}>
+                <span className="bar3" style={{ background: subjectColor(p.subject) }}/>
+                <div className="pi-l">
+                  <div className="pi-name">{p.label} <span className="pi-mins">{p.mins}m</span></div>
+                  <div className="pi-reason">{p.blockLabel} · {p.reason}</div>
+                </div>
+                <span className={"pi-tag " + p.kind}>{kindLabel[p.kind]}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="modal-foot">
+        <div className="hint">only fills free space · won't touch what you placed</div>
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary" onClick={apply} disabled={!placements.length}>Apply plan</button>
+      </div>
+    </Modal>
+  );
+}
+
+Object.assign(window, { Modal, AddTaskModal, CommandPalette, SignInScreen, PlanReviewModal });

@@ -91,12 +91,14 @@ function TaskRow({ task, sourceBlockKey, onRemove, onAddSession }) {
     clearDrag();
   };
   return (
-    <div className={"task" + (task.done ? ' done' : '')} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title={task.label}>
+    <div className={"task" + (task.done ? ' done' : '')} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title={task.reason || task.label}>
       <span className="bar3" style={{ background: subjectColor(task.subject) }}/>
       {task.done && <span className="task-check">✓</span>}
       <span className="name">{task.label}</span>
       {task.session > 1 && <span className="sess">pt {task.session}</span>}
       <span className="mins">{task.mins}m</span>
+      {task.type === 'homework' && <span className="src hw">HW</span>}
+      {task.type === 'revision' && <span className="src rev">REV</span>}
       {task.source === 'teams' && <span className="src teams">Teams</span>}
       {task.source === 'gcal' && <span className="src gcal">GCal</span>}
       {onAddSession && !task.done && (

@@ -499,6 +499,143 @@ function upcomingAssessments(state) {
     .sort((x, y) => x.date.localeCompare(y.date));
 }
 
+// ─── The advisory planner (Increment 2) ──────────────────────
+// Earliest-deadline-first: the classic, provably-good way to meet deadlines
+// on a single limited resource (your blocks). Homework and exam revision are
+// broken into sessions, each with a deadline (homework due-1d buffer; exam
+// date-1d) and an earliest date (revision only within its run-up window), then
+// placed deadline-soonest-first into the earliest valid block. General revision
+// fills whatever's left. Non-destructive: it only ever fills FREE space, and
+// counts what's already placed, so re-running adds only the shortfall.
+const REV_WINDOW_DAYS = 14, HW_BUFFER_DAYS = 1, HW_SESSION_MAX = 90;
+let __pid = 0;
+function newTaskId() { return 't-' + Date.now() + '-' + (++__pid) + Math.random().toString(36).slice(2, 5); }
+function maxISO(a, b) { return a > b ? a : b; }
+function splitIntoSessions(totalMins, chunk) {
+  chunk = chunk || HW_SESSION_MAX;
+  let rem = totalMins || chunk; const out = [];
+  if (rem <= 0) rem = chunk;
+  while (rem > 0) { const m = Math.min(chunk, rem); out.push(m); rem -= m; }
+  return out;
+}
+
+function planSchedule(state) {
+  const today = todayISO();
+  const deadlines = [
+    ...(state.assessments || []).filter(a => a.date > today).map(a => a.date),
+    ...state.tasks.filter(t => !t.recurringId && t.due && !t.done && !t.blockKey).map(t => t.due),
+  ].sort();
+  const last = deadlines[deadlines.length - 1];
+  const horizon = last
+    ? maxISO(isoDate(addDays(dateFromISO(last), 2)), isoDate(addDays(dateFromISO(today), 13)))
+    : isoDate(addDays(dateFromISO(today), 13));
+
+  // Supply: blocks today→horizon with their remaining free minutes.
+  const blocks = [];
+  const dayKeys = {}; // dISO -> { rec:Set(recurringId), exam:Set(assessmentId) } for spacing
+  for (let d = dateFromISO(today); isoDate(d) <= horizon; d = addDays(d, 1)) {
+    const dISO = isoDate(d);
+    dayKeys[dISO] = { rec: new Set(), exam: new Set() };
+    (state.schedule[weekdayKey(d)] || []).forEach(slot => {
+      const bk = blockKeyOf(dISO, slot.id);
+      blocks.push({ bk, dISO, label: slot.label, free: slot.mins - blockUsedMins(state, bk) });
+    });
+  }
+  state.tasks.filter(t => t.blockKey).forEach(t => {
+    const dt = parseBlockKey(t.blockKey).date;
+    if (!dayKeys[dt]) return;
+    if (t.recurringId) dayKeys[dt].rec.add(t.recurringId);
+    if (t.assessmentId) dayKeys[dt].exam.add(t.assessmentId);
+  });
+
+  const placements = [], unfit = [];
+
+  // Commitments: homework sessions + exam-revision sessions.
+  const commitments = [];
+  state.tasks.filter(t => !t.recurringId && t.due && !t.done && !t.blockKey).forEach(t => {
+    const parts = splitIntoSessions(t.mins || 60, HW_SESSION_MAX);
+    parts.forEach((m, i) => commitments.push({
+      kind: 'homework', taskId: t.id, label: t.label, subject: t.subject, mins: m,
+      earliest: today, deadline: isoDate(addDays(dateFromISO(t.due), -HW_BUFFER_DAYS)),
+      part: i, parts: parts.length, due: t.due,
+    }));
+  });
+  (state.assessments || []).filter(a => a.date > today).forEach(a => {
+    const need = Math.max(0, assessmentRevisionTarget(state, a) - state.tasks.filter(t => t.assessmentId === a.id).length);
+    const winStart = maxISO(today, isoDate(addDays(dateFromISO(a.date), -REV_WINDOW_DAYS)));
+    const deadline = isoDate(addDays(dateFromISO(a.date), -1));
+    const struggle = assessmentStruggleBonus(state, a.subject);
+    for (let i = 0; i < need; i++) commitments.push({
+      kind: 'revision', assessmentId: a.id, label: 'Revise ' + a.subject, subject: a.subject,
+      mins: a.sessionMins || 45, earliest: winStart, deadline, examDate: a.date, examLabel: a.label, struggle,
+    });
+  });
+  commitments.sort((x, y) =>
+    x.deadline.localeCompare(y.deadline) || x.earliest.localeCompare(y.earliest) ||
+    (x.kind === y.kind ? 0 : x.kind === 'homework' ? -1 : 1));
+
+  commitments.forEach(c => {
+    const b = blocks.find(bl => bl.dISO >= c.earliest && bl.dISO <= c.deadline && bl.free >= c.mins &&
+      (c.kind === 'revision' ? !dayKeys[bl.dISO].exam.has(c.assessmentId) : true));
+    if (!b) { unfit.push(c); return; }
+    b.free -= c.mins;
+    if (c.kind === 'revision') dayKeys[b.dISO].exam.add(c.assessmentId);
+    const reason = c.kind === 'homework'
+      ? 'Due ' + fmtDayShort(dateFromISO(c.due)) + (c.parts > 1 ? ` · part ${c.part + 1}/${c.parts}` : '')
+      : `${c.examLabel || c.subject} exam · ${daysUntil(c.examDate)}d out` + (c.struggle ? ' · extra (struggling)' : '');
+    placements.push({ bk: b.bk, dISO: b.dISO, blockLabel: b.label, kind: c.kind, label: c.label, subject: c.subject,
+      mins: c.mins, reason, taskId: c.taskId, assessmentId: c.assessmentId });
+  });
+
+  // General revision fills the rest of THIS WEEK from weekly targets.
+  const weekStart = mondayOf(dateFromISO(today));
+  const weekEnd = isoDate(addDays(weekStart, 7));
+  state.recurring.map(r => ({ r, remaining: Math.max(0, r.target - recurringDoneThisWeek(state, weekStart, r.id)) }))
+    .filter(x => x.remaining > 0)
+    .sort((a, b) => (a.r.group === 'subject' ? 0 : 1) - (b.r.group === 'subject' ? 0 : 1) || b.remaining - a.remaining)
+    .forEach(({ r, remaining }) => {
+      let n = remaining;
+      while (n > 0) {
+        const b = blocks.find(bl => bl.dISO >= today && bl.dISO < weekEnd && bl.free >= r.mins && !dayKeys[bl.dISO].rec.has(r.id));
+        if (!b) break;
+        b.free -= r.mins; dayKeys[b.dISO].rec.add(r.id);
+        placements.push({ bk: b.bk, dISO: b.dISO, blockLabel: b.label, kind: 'general', label: r.label, subject: r.subject, mins: r.mins, reason: 'Weekly revision', recurringId: r.id });
+        n--;
+      }
+    });
+
+  placements.sort((a, b) => a.bk.localeCompare(b.bk));
+  return { placements, unfit, horizon };
+}
+
+// Convert an accepted plan into tasks (non-destructive add/assign).
+function applyPlan(state, placements) {
+  const byTask = {};
+  placements.filter(p => p.kind === 'homework').forEach(p => { (byTask[p.taskId] = byTask[p.taskId] || []).push(p); });
+  let tasks = state.tasks.map(t => {
+    const ps = byTask[t.id];
+    if (!ps) return t;
+    return { ...t, blockKey: ps[0].bk, mins: ps[0].mins, type: 'homework', reason: ps[0].reason, seriesId: ps.length > 1 ? t.id : t.seriesId };
+  });
+  Object.keys(byTask).forEach(tid => {
+    const ps = byTask[tid]; if (ps.length <= 1) return;
+    const base = state.tasks.find(t => t.id === tid);
+    ps.slice(1).forEach((p, i) => tasks.push({
+      id: newTaskId(), label: base.label, subject: base.subject, mins: p.mins, due: base.due || null,
+      blockKey: p.bk, type: 'homework', source: base.source || null, seriesId: tid, session: i + 2, reason: p.reason,
+    }));
+  });
+  placements.filter(p => p.kind === 'revision').forEach(p => tasks.push({
+    id: newTaskId(), label: p.label, subject: p.subject, mins: p.mins, blockKey: p.bk,
+    type: 'revision', assessmentId: p.assessmentId, reason: p.reason,
+  }));
+  placements.filter(p => p.kind === 'general').forEach(p => tasks.push({
+    id: newTaskId(), label: p.label, subject: p.subject, mins: p.mins, blockKey: p.bk,
+    recurringId: p.recurringId, type: 'general', reason: p.reason,
+  }));
+  return { ...state, tasks };
+}
+
 // ─── Reminders (browser Notification permission) ─────────────
 function reminderPermission() {
   return (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
@@ -538,6 +675,7 @@ Object.assign(window, {
   autoPlanWeek, activityConflict, nextSessionBlock, addSessionFor,
   currentStreak, isStruggleEntry, weeklyRecap,
   daysUntil, assessmentStruggleBonus, revisionPlanFor, assessmentRevisionTarget, upcomingAssessments,
+  planSchedule, applyPlan, splitIntoSessions,
   reminderPermission, requestReminderPermission,
   makeStore,
 });
